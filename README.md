@@ -4,7 +4,7 @@
 ![Category](https://img.shields.io/badge/Categoria-Web%20Exploitation-blue?style=for-the-badge)
 ![OS](https://img.shields.io/badge/SO-Linux%20Ubuntu-purple?style=for-the-badge)
 
-Documentação técnica da exploração da máquina **Plotted-TMS** no TryHackMe. Este laboratório aborda técnicas de **Reconhecimento Web**, **SQL Injection**, **Unrestricted File Upload**, **Cron Job Hijacking** e **Escalação de Privilégios com doas/openssl**.
+Documentação técnica da exploração da máquina **Plotted-TMS** no TryHackMe. Neste laboratório usei técnicas de **Reconhecimento Web**, **SQL Injection**, **Unrestricted File Upload**, **Cron Job Hijacking** e **Escalação de Privilégios com doas/openssl**.
 
 ---
 
@@ -20,7 +20,7 @@ Foram identificadas três portas abertas: **22 (SSH)**, **80 (HTTP)** e **445** 
 
 ### Varredura Detalhada de Serviços
 
-Com as portas em mãos, executei um scan com detecção de versão (`-sV`) e scripts padrão (`-sC`) para confirmar os serviços:
+Executei um scan com detecção de versão (`-sV`) e scripts padrão (`-sC`) para confirmar os serviços que encontrei no scan agressivo:
 
 [![Nmap Detalhado](img/nmap_nas_portas_achadas.png)](img/nmap_nas_portas_achadas.png)
 
@@ -36,7 +36,7 @@ Com as portas em mãos, executei um scan com detecção de versão (`-sV`) e scr
 
 ### Inspeção Inicial
 
-O acesso direto ao IP na porta 80 retornou a página padrão do Apache2 Ubuntu, sem nenhum conteúdo relevante visível.
+O acesso direto ao IP na porta 80 retornou a página padrão do Apache2 Ubuntu, sem nenhum conteúdo relevante, procurei por algo suspeito no código fonte , mas parece tudo normal por enquanto.
 
 [![Apache Porta 80](img/apache_80.png)](img/apache_80.png)
 
@@ -50,7 +50,7 @@ gobuster dir -u http://10.66.184.54/ -w /usr/share/dirb/wordlists/common.txt
 
 [![Gobuster Porta 80](img/gobuster_inicial.png)](img/gobuster_inicial.png)
 
-Os endpoints mais interessantes foram `/admin`, `/passwd` e `/shadow` — todos acessíveis sem autenticação.
+Os endpoints mais interessantes foram `/admin`, `/passwd` e `/shadow` — todos acessíveis sem autenticação nenhuma.
 
 ### Análise do diretório /admin/
 
@@ -72,7 +72,7 @@ O endpoint `//passwd` também retornava uma string em Base64:
 
 ## 🪤 3. Rabbit Holes — Falsos Positivos
 
-Ao decodificar ambos os artefatos, os resultados foram mensagens propositalmente enganosas:
+Após decodificar ambas as stings, os resultados foram mensagens propositalmente enganosas:
 
 [![Decode id_rsa](img/decode_texto_id_rsa.png)](img/decode_texto_id_rsa.png)
 
@@ -82,7 +82,7 @@ Ao decodificar ambos os artefatos, os resultados foram mensagens propositalmente
 
 > *"not this easy :D"*
 
-Ambos os arquivos eram **rabbit holes** — armadilhas intencionais para desviar o foco. A enumeração precisava continuar.
+Os dois arquivos eram **rabbit holes** — arquivos intencionais para tirar o foco. A enumeração precisava continuar.
 
 ---
 
@@ -90,7 +90,7 @@ Ambos os arquivos eram **rabbit holes** — armadilhas intencionais para desviar
 
 ### Inspeção Inicial
 
-A porta 445 também respondia com a página padrão do Apache2:
+A porta 445 também respondia com a página padrão do Apache2 mesmo não sendo uma porta padrão para esse serviço:
 
 [![Apache Porta 445](img/pagina_porta_445.png)](img/pagina_porta_445.png)
 
@@ -102,7 +102,7 @@ gobuster dir -u http://10.66.184.54:445/ -w /usr/share/dirb/wordlists/common.txt
 
 [![Gobuster Porta 445](img/gobuster_apache_da_porta_445.png)](img/gobuster_apache_da_porta_445.png)
 
-Foi encontrado o diretório `/management`, que levava à aplicação real da máquina.
+Encontrei o diretório `/management`, que levava à aplicação real da máquina.
 
 ### Aplicação identificada: Traffic Offense Management System
 
@@ -112,7 +112,7 @@ Acessando `/management/`, foi revelada a aplicação-alvo:
 
 ### Gobuster dentro de /management/
 
-Uma segunda rodada de enumeração mapeou toda a estrutura interna da aplicação:
+Enumerei dentro do diretório '/management' e foi mapeado toda a estrutura interna da aplicação:
 
 ```bash
 gobuster dir -u http://10.66.184.54:445/management -w /usr/share/dirb/wordlists/common.txt
@@ -120,7 +120,7 @@ gobuster dir -u http://10.66.184.54:445/management -w /usr/share/dirb/wordlists/
 
 [![Gobuster Management](img/gobuster_no_diretorio_management.png)](img/gobuster_no_diretorio_management.png)
 
-Entre os diretórios encontrados, o `/database/` e o `/uploads/` chamaram atenção imediata.
+Entre os diretórios encontrados, o `/database/` e o `/uploads/` me chamaram a atenção.
 
 ---
 
@@ -128,7 +128,7 @@ Entre os diretórios encontrados, o `/database/` e o `/uploads/` chamaram atenç
 
 ### Directory Listing em /database/
 
-O directory listing estava habilitado, expondo um arquivo `traffic_offense_db.sql` de 10KB completamente acessível sem autenticação:
+O directory listing estava habilitado, expondo um arquivo `traffic_offense_db.sql` de 10KB completamente acessível sem autenticação, que permite QUALQUER pessoa ler o arquivo do banco de dados:
 
 [![Diretório /database](img/diretorio_db_sql.png)](img/diretorio_db_sql.png)
 
@@ -197,11 +197,11 @@ Com o bypass bem-sucedido, o painel administrativo completo foi acessado como **
 
 ### 6.4 Unrestricted File Upload — Reverse Shell
 
-Na seção **Settings** do painel, os campos de upload de imagem não realizavam nenhuma validação de tipo de arquivo. Fiz o upload de uma PHP reverse shell renomeada como `testeee.php`:
+Na seção **Settings** do painel, os campos de upload de imagem não realizavam nenhuma validação de tipo de arquivo. Fiz o upload de uma PHP com uma reverse shell como nome de `testeee.php`:
 
 [![Upload Shell](img/subindo_shell_por_upload.png)](img/subindo_shell_por_upload.png)
 
-Com um listener Netcat ativo na porta 4444, acessei o arquivo pelo browser em `/management/uploads/testeee.php`:
+Com o listener do Netcat ativo na porta 4444, acessei o arquivo pelo browser na pagina `/management` onde as imagens do website foram substituídas pelo script PHP malicioso:
 
 [![Acessando Shell](img/acessando_a_shell_na_pagina.png)](img/acessando_a_shell_na_pagina.png)
 
@@ -223,7 +223,7 @@ Com a shell ativa, tentei ler a user flag mas o acesso foi negado:
 
 [![Sem Acesso Flag](img/ainda_sem_acesso_da_flag_user.png)](img/ainda_sem_acesso_da_flag_user.png)
 
-Rodei um `find` para identificar binários com SUID, onde o `/usr/bin/doas` apareceu como item de interesse:
+Rodei um `find / -perm -4000 -type f 2>/dev/null` para identificar binários com SUID, onde o `/usr/bin/doas` apareceu como item de interesse:
 
 [![Find SUID](img/encontrando_doas_com_find_suid.png)](img/encontrando_doas_com_find_suid.png)
 
@@ -237,7 +237,7 @@ Também li o `/etc/crontab` e encontrei uma tarefa executada a cada minuto pelo 
 
 ### 7.2 Cron Job Hijacking — Escalada para plot_admin
 
-Verifiquei as permissões do script e confirmei que o `www-data` tinha permissão de escrita:
+Verifiquei as permissões do script e diretório e confirmei que o `www-data` tinha permissão de escrita:
 
 [![Permissão no Script](img/permissao_total_no_diretorio_do_script.png)](img/permissao_total_no_diretorio_do_script.png)
 
@@ -280,7 +280,7 @@ A configuração do `doas` permitia que `plot_admin` executasse `openssl` como r
 permit nopass plot_admin as root cmd openssl
 ```
 
-O `openssl` está catalogado no **GTFOBins** como vetor de leitura arbitrária de arquivos com privilégios elevados. Utilizei o seguinte comando para ler `/root/root.txt` diretamente:
+O `openssl` está catalogado no **GTFOBins** como vetor de leitura arbitrária de arquivos com privilégios elevados. Utilizei o seguinte comando para ler a flag `/root/root.txt` diretamente:
 
 ```bash
 doas openssl enc -in /root/root.txt
@@ -390,4 +390,4 @@ A regra `permit nopass plot_admin as root cmd openssl` no `/etc/doas.conf` permi
 
 ---
 
-📝 **Documentação criada por twix**
+📝 **Documentação criada por Lucas Arruda**
